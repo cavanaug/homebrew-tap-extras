@@ -4,8 +4,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 MIN_AGE_DAYS=2
 
+usage() {
+  cat <<'EOF'
+Usage: update-all.sh [--min-age-days DAYS] [--help]
+
+Run all updater scripts in the scripts directory.
+
+Options:
+  --min-age-days DAYS  Minimum release age in days passed to each updater
+  --help               Show this help message and exit
+EOF
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
     --min-age-days)
       [ "$#" -ge 2 ] || {
         echo "Missing value for --min-age-days" >&2

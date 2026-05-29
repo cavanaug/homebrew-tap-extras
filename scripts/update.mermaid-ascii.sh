@@ -3,8 +3,24 @@ set -euo pipefail
 
 MIN_AGE_DAYS=2
 
+usage() {
+  cat <<'EOF'
+Usage: update.mermaid-ascii.sh [--min-age-days DAYS] [--help]
+
+Update Formula/mermaid-ascii.rb to the latest eligible GitHub release.
+
+Options:
+  --min-age-days DAYS  Minimum release age in days before it can be selected
+  --help               Show this help message and exit
+EOF
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
     --min-age-days)
       [ "$#" -ge 2 ] || {
         echo "Missing value for --min-age-days" >&2
@@ -31,66 +47,36 @@ case "$MIN_AGE_DAYS" in
     ;;
 esac
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(git rev-parse --show-toplevel)"
 FORMULA="${ROOT}/Formula/mermaid-ascii.rb"
 REPO="AlexanderGrooff/mermaid-ascii"
-API="https://api.github.com/repos/${REPO}/releases/latest"
 
 current_version() {
   ruby -e 'puts File.read(ARGV[0])[/^\s*version\s+"([^"]+)"/, 1]' "$1"
 }
 
-release_data() {
-  curl -fsSL "$API"
-}
-
 CURRENT="$(current_version "$FORMULA")"
-RELEASE_JSON="$(release_data)"
-
-eval "$({
-  printf '%s' "$RELEASE_JSON" | ruby -rjson -rtime -e '
-    release = JSON.parse(STDIN.read)
-    version = release.fetch("tag_name").sub(/^v/, "")
-    published_at = Time.iso8601(release.fetch("published_at"))
-    min_age_days = Integer(ARGV.fetch(0))
-    age_days = ((Time.now.utc - published_at) / 86_400).floor
-    assets = release.fetch("assets").to_h do |asset|
-      digest = asset["digest"].to_s.sub(/^sha256:/, "")
-      [asset.fetch("name"), digest]
-    end
-
-    required = {
-      darwin_arm64:  "mermaid-ascii_Darwin_arm64.tar.gz",
-      darwin_x86_64: "mermaid-ascii_Darwin_x86_64.tar.gz",
-      linux_arm64:   "mermaid-ascii_Linux_arm64.tar.gz",
-      linux_x86_64:  "mermaid-ascii_Linux_x86_64.tar.gz",
-    }
-
-    missing = required.values.reject { |name| assets[name] && !assets[name].empty? }
-    abort "Missing release assets: #{missing.join(", ")}" unless missing.empty?
-
-    puts "LATEST=#{version.dump}"
-    puts "PUBLISHED_AT=#{release.fetch("published_at").dump}"
-    puts "AGE_DAYS=#{age_days}"
-    puts "TOO_NEW=#{(age_days < min_age_days).to_s.dump}"
-    required.each do |key, name|
-      puts "#{key.to_s.upcase}=#{assets.fetch(name).dump}"
-    end
-  ' "$MIN_AGE_DAYS"
-})"
+eval "$(ruby "$SCRIPT_DIR/select-release.rb" \
+  --repo "$REPO" \
+  --min-age-days "$MIN_AGE_DAYS" \
+  --asset DARWIN_ARM64=mermaid-ascii_Darwin_arm64.tar.gz \
+  --asset DARWIN_X86_64=mermaid-ascii_Darwin_x86_64.tar.gz \
+  --asset LINUX_ARM64=mermaid-ascii_Linux_arm64.tar.gz \
+  --asset LINUX_X86_64=mermaid-ascii_Linux_x86_64.tar.gz)"
 
 echo "Current version: ${CURRENT}"
-echo "Latest version:  ${LATEST}"
-echo "Published at:    ${PUBLISHED_AT}"
-echo "Age (days):      ${AGE_DAYS}"
-
-if [ "$TOO_NEW" = "true" ]; then
-  echo "Skipping update: release is newer than ${MIN_AGE_DAYS} days"
+if [ "$FOUND" != "true" ]; then
+  echo "Skipping update: no release is at least ${MIN_AGE_DAYS} days old"
   exit 0
 fi
 
+echo "Latest eligible: ${LATEST}"
+echo "Published at:    ${PUBLISHED_AT}"
+echo "Age (days):      ${AGE_DAYS}"
+
 if [ "$LATEST" = "$CURRENT" ]; then
-  echo "Already at latest: ${CURRENT}"
+  echo "Already at latest eligible: ${CURRENT}"
   exit 0
 fi
 

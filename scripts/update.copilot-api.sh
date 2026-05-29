@@ -3,8 +3,24 @@ set -euo pipefail
 
 MIN_AGE_DAYS=2
 
+usage() {
+  cat <<'EOF'
+Usage: update.copilot-api.sh [--min-age-days DAYS] [--help]
+
+Update Formula/copilot-api.rb to the latest eligible GitHub release.
+
+Options:
+  --min-age-days DAYS  Minimum release age in days before it can be selected
+  --help               Show this help message and exit
+EOF
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
     --min-age-days)
       [ "$#" -ge 2 ] || {
         echo "Missing value for --min-age-days" >&2
@@ -31,10 +47,10 @@ case "$MIN_AGE_DAYS" in
     ;;
 esac
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(git rev-parse --show-toplevel)"
 FORMULA="${ROOT}/Formula/copilot-api.rb"
 REPO="caozhiyuan/copilot-api"
-API="https://api.github.com/repos/${REPO}/releases/latest"
 
 # Extract current version from the primary formula URL only.
 CURRENT=$(ruby -e '
@@ -44,34 +60,23 @@ CURRENT=$(ruby -e '
   puts version
 ' "$FORMULA")
 
-eval "$({
-  curl -fsSL "$API" | ruby -rjson -rtime -e '
-    release = JSON.parse(STDIN.read)
-    latest = release.fetch("tag_name").sub(/^v/, "")
-    published_at = Time.iso8601(release.fetch("published_at"))
-    min_age_days = Integer(ARGV.fetch(0))
-    age_days = ((Time.now.utc - published_at) / 86_400).floor
-
-    puts "LATEST=#{latest.dump}"
-    puts "PUBLISHED_AT=#{release.fetch("published_at").dump}"
-    puts "AGE_DAYS=#{age_days}"
-    puts "TOO_NEW=#{(age_days < min_age_days).to_s.dump}"
-  ' "$MIN_AGE_DAYS"
-})"
+eval "$(ruby "$SCRIPT_DIR/select-release.rb" \
+  --repo "$REPO" \
+  --min-age-days "$MIN_AGE_DAYS")"
 
 echo "Current version: v${CURRENT}"
-echo "Latest version:  v${LATEST}"
-echo "Published at:    ${PUBLISHED_AT}"
-echo "Age (days):      ${AGE_DAYS}"
-
-if [ "$TOO_NEW" = "true" ]; then
-    echo "Skipping update: release is newer than ${MIN_AGE_DAYS} days"
+if [ "$FOUND" != "true" ]; then
+    echo "Skipping update: no release is at least ${MIN_AGE_DAYS} days old"
     exit 0
 fi
 
+echo "Latest eligible: v${LATEST}"
+echo "Published at:    ${PUBLISHED_AT}"
+echo "Age (days):      ${AGE_DAYS}"
+
 # Idempotent guard — exit cleanly if already at latest
 if [ "$LATEST" = "$CURRENT" ]; then
-    echo "Already at latest: v${CURRENT}"
+    echo "Already at latest eligible: v${CURRENT}"
     exit 0
 fi
 
