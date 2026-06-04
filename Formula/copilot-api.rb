@@ -4,30 +4,20 @@
 class CopilotApi < Formula
   desc "Turn GitHub Copilot into an OpenAI/Anthropic-compatible API server"
   homepage "https://github.com/caozhiyuan/copilot-api"
-  url "https://github.com/caozhiyuan/copilot-api/archive/refs/tags/v1.10.22.tar.gz"
-  sha256 "bd8c9657a3113c47cddd6d7cb30e8d5fbe2a85efa0ced913469272a3b1c39b04"
+  url "https://registry.npmjs.org/@jeffreycao/copilot-api/-/copilot-api-1.10.22.tgz"
+  sha256 "e67b63a3640a5db2f6b98a76bb2c6e19468eff85bf871e2deef0becbfea4b48e"
   license "MIT"
 
   livecheck do
-    url :stable
-    regex(/^v?(\d+(?:\.\d+)+)$/i)
+    url "https://registry.npmjs.org/@jeffreycao/copilot-api/latest"
+    regex(/["']version["']:\s*["'](\d+(?:\.\d+)+)["']/i)
   end
 
-  depends_on "oven-sh/bun/bun"
+  depends_on "node"
 
   def install
-    system "bun", "install", "--frozen-lockfile"
-    system "bun", "run", "build"
-
-    # tsdown code-splits but does not bundle node_modules — runtime needs them.
-    # pages/ must be a sibling of dist/ under libexec — server.ts resolves
-    # pages/index.html via new URL("../pages/index.html", import.meta.url)
-    libexec.install "dist", "pages", "node_modules"
-
-    (bin/"copilot-api").write <<~EOS
-      #!/bin/bash
-      exec "#{Formula["oven-sh/bun/bun"].opt_bin}/bun" "#{libexec}/dist/main.js" "$@"
-    EOS
+    system "npm", "install", *std_npm_args
+    bin.install_symlink libexec.glob("bin/*")
 
     (share/"copilot-api").mkpath
     (share/"copilot-api/copilot-api.service").write <<~EOS

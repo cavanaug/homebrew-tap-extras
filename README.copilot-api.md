@@ -9,11 +9,17 @@ Homebrew tap for [copilot-api](https://github.com/caozhiyuan/copilot-api) — tu
 ## Install
 
 ```bash
-brew tap cavanaug/copilot-api
+brew install cavanaug/tap-extras/copilot-api
+```
+
+Or add the tap first:
+
+```bash
+brew tap cavanaug/tap-extras
 brew install copilot-api
 ```
 
-> **Note:** [Bun](https://bun.sh) is required and is installed automatically as a dependency.
+> **Note:** [Node.js](https://nodejs.org) is required and is installed automatically as a dependency. Token usage storage needs Node ≥ 22.13 (Homebrew `node` satisfies this). See upstream docs if you need Bun-specific behavior.
 
 ---
 
@@ -105,6 +111,8 @@ To check status or view logs:
 systemctl --user status copilot-api
 journalctl --user -u copilot-api -f
 ```
+
+When you upgrade the formula (`brew upgrade copilot-api`), Homebrew restarts the user service automatically **only if** it is both enabled and already running. Stopped or disabled installs are left alone.
 
 ---
 
@@ -205,11 +213,11 @@ brew update && brew upgrade copilot-api
 
 ### From the tap repo (maintainers)
 
-`update.sh` fetches the latest GitHub release, computes its SHA256, and updates the formula idempotently. Run it from the tap repository root:
+`scripts/update.copilot-api.sh` selects the latest eligible GitHub release (minimum age), fetches the matching npm tarball SHA256, and updates the formula idempotently. Run it from the tap repository root:
 
 ```bash
-cd $(brew --repo cavanaug/copilot-api)
-./update.sh
+cd "$(brew --repo cavanaug/tap-extras 2>/dev/null || git rev-parse --show-toplevel)"
+./scripts/update.copilot-api.sh
 brew reinstall copilot-api
 ```
 

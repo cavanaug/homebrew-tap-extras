@@ -7,7 +7,7 @@ usage() {
   cat <<'EOF'
 Usage: update.copilot-api.sh [--min-age-days DAYS] [--help]
 
-Update Formula/copilot-api.rb to the latest eligible GitHub release.
+Update Formula/copilot-api.rb to the latest eligible GitHub release (npm tarball).
 
 Options:
   --min-age-days DAYS  Minimum release age in days before it can be selected
@@ -52,10 +52,10 @@ ROOT="$(git rev-parse --show-toplevel)"
 FORMULA="${ROOT}/Formula/copilot-api.rb"
 REPO="caozhiyuan/copilot-api"
 
-# Extract current version from the primary formula URL only.
+# Extract current version from the npm registry tarball URL.
 CURRENT=$(ruby -e '
   content = File.read(ARGV[0])
-  version = content[/^\s*url\s+"https:\/\/github\.com\/caozhiyuan\/copilot-api\/archive\/refs\/tags\/v([^\"]+)\.tar\.gz"/, 1]
+  version = content[%r{registry\.npmjs\.org/@jeffreycao/copilot-api/-/copilot-api-([0-9][0-9.]*)\.tgz}, 1]
   abort "Failed to extract current version from #{ARGV[0]}" unless version
   puts version
 ' "$FORMULA")
@@ -80,13 +80,12 @@ if [ "$LATEST" = "$CURRENT" ]; then
     exit 0
 fi
 
-# Build tarball URL and compute SHA256 (shasum -a 256 available on macOS and Homebrew Linux)
-TARBALL="https://github.com/${REPO}/archive/refs/tags/v${LATEST}.tar.gz"
+TARBALL="https://registry.npmjs.org/@jeffreycao/copilot-api/-/copilot-api-${LATEST}.tgz"
 echo "Computing sha256 for ${TARBALL} ..."
 SHA256=$(curl -fsSL "$TARBALL" | shasum -a 256 | awk '{print $1}')
 
 # Update url line — cross-platform sed with .bak idiom (works on BSD and GNU sed)
-sed -i.bak "s|/tags/v[0-9][0-9.]*\.tar\.gz|/tags/v${LATEST}.tar.gz|" "$FORMULA"
+sed -i.bak "s|/copilot-api-[0-9][0-9.]*\.tgz|/copilot-api-${LATEST}.tgz|" "$FORMULA"
 rm -f "${FORMULA}.bak"
 
 # Update sha256 line — POSIX BRE quantifier \{64\} for the hex digest
