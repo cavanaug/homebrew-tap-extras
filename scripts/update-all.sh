@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-MIN_AGE_DAYS=2
-
 usage() {
   cat <<'EOF'
 Usage: update-all.sh [--min-age-days DAYS] [--help]
@@ -16,37 +13,10 @@ Options:
 EOF
 }
 
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    --min-age-days)
-      [ "$#" -ge 2 ] || {
-        echo "Missing value for --min-age-days" >&2
-        exit 1
-      }
-      MIN_AGE_DAYS="$2"
-      shift 2
-      ;;
-    --min-age-days=*)
-      MIN_AGE_DAYS="${1#*=}"
-      shift
-      ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      exit 1
-      ;;
-  esac
-done
-
-case "$MIN_AGE_DAYS" in
-  ''|*[!0-9]*)
-    echo "--min-age-days must be a non-negative integer" >&2
-    exit 1
-    ;;
-esac
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/args.sh
+source "$SCRIPT_DIR/lib/args.sh"
+parse_min_age_days "$@"
 
 mapfile -t UPDATE_SCRIPTS < <(
   for script in "$SCRIPT_DIR"/update.*.sh; do
@@ -67,7 +37,7 @@ for script in "${UPDATE_SCRIPTS[@]}"; do
   name="$(basename "$script")"
   echo "==> Running ${name} (--min-age-days=${MIN_AGE_DAYS})"
 
-  if output="$($script --min-age-days="$MIN_AGE_DAYS" 2>&1)"; then
+  if output="$("$script" --min-age-days="$MIN_AGE_DAYS" 2>&1)"; then
     PASSED+=("$name")
     if [ -n "$output" ]; then
       printf '%s\n' "$output"
